@@ -2,14 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const mm = require('music-metadata');
-const Redis = require('ioredis');
 
 const fileListPath = path.join(__dirname, 'file-list.json');
 const outputFile = path.join(__dirname, 'public', 'songs.json');
 const R2_BASE_URL = 'https://pub-1c79986ea9fd4e8ba1314119816ce4f1.r2.dev';
-const POPULAR_THRESHOLD = 5; // Songs with > 5 requests
-
-const redis = new Redis(process.env.REDIS_URL);
 
 async function fetchAndParse(fileName) {
   return new Promise((resolve, reject) => {
@@ -28,15 +24,11 @@ async function fetchAndParse(fileName) {
           thumbnailBase64 = `data:${picture.format};base64,${picture.data.toString('base64')}`;
         }
 
-        // Get hits from Redis
-        const hits = await redis.get(`hit:${fileName}`) || 0;
-
         resolve({
           name: metadata.common.title || path.parse(fileName).name,
           artist: metadata.common.artist || 'Unknown',
           thumbnail: thumbnailBase64,
-          file: `/api/stream?file=${encodeURIComponent(fileName)}`,
-          popular: parseInt(hits) >= POPULAR_THRESHOLD
+          file: `/api/stream?file=${encodeURIComponent(fileName)}`
         });
       } catch (err) {
         reject(err);
@@ -62,7 +54,6 @@ async function generateSongsIndex() {
 
   fs.writeFileSync(outputFile, JSON.stringify(songs, null, 2));
   console.log(`Generated ${outputFile} with ${songs.length} songs.`);
-  await redis.disconnect();
 }
 
 generateSongsIndex();
