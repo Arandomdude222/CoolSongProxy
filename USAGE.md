@@ -1,32 +1,29 @@
-# CoolSongProxy Usage Guide
+# CoolSongProxy API
 
-This project serves as a frontend for your music library, with files hosted on Cloudflare R2 and metadata generated automatically.
+This project provides a simple API to fetch metadata for your hosted MP3 files.
 
-## Workflow to Add New Songs
+## Fetching the Song List
 
-1.  **Upload Files:**
-    Upload your MP3 files to your Cloudflare R2 bucket.
+The song metadata is served as a static JSON file at the root of your deployment.
 
-2.  **Update File List:**
-    Open `file-list.json` in this repository and add the exact filenames of the new MP3s you just uploaded to R2.
-    ```json
-    [
-      "Artist - Song Name.mp3",
-      "Another Song.mp3"
-    ]
-    ```
+### Endpoint
+`GET /songs.json`
 
-3.  **Generate Index:**
-    Run the build script locally. This will fetch the metadata (Artist, Name, Thumbnail) directly from the files in your R2 bucket and update `public/songs.json`.
-    ```bash
-    npm run build
-    ```
+### Response Format
+```json
+[
+  {
+    "name": "Song Title",
+    "artist": "Artist Name",
+    "thumbnail": "data:image/jpeg;base64,...",
+    "file": "https://pub-xxxx.r2.dev/filename.mp3"
+  }
+]
+```
 
-4.  **Deploy:**
-    Commit and push the changes to your GitHub repository.
-    ```bash
-    git add .
-    git commit -m "Add new songs to library"
-    git push
-    ```
-    Vercel will automatically redeploy your site with the updated `songs.json`.
+## How to Maintain the Library
+
+1.  **Upload MP3s:** Upload new MP3 files to your Cloudflare R2 bucket.
+2.  **Update File List:** Add the new filenames to `file-list.json`.
+3.  **Generate Index:** Run `npm run build` locally. This fetches metadata from R2, generates the new `public/songs.json`, and saves it.
+4.  **Deploy:** Commit and push the changes to GitHub. Vercel will update the `songs.json` served at your site's root.
