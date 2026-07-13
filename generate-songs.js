@@ -2,17 +2,21 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const mm = require('music-metadata');
+const Redis = require('ioredis');
 
 const fileListPath = path.join(__dirname, 'file-list.json');
 const outputFile = path.join(__dirname, 'public', 'songs.json');
 const R2_BASE_URL = 'https://pub-1c79986ea9fd4e8ba1314119816ce4f1.r2.dev';
+const POPULAR_THRESHOLD = 5; // Songs with > 5 requests
 
-async function fetchAndParse(file) {
+const redis = new Redis(process.env.REDIS_URL);
+
+async function fetchAndParse(fileName) {
   return new Promise((resolve, reject) => {
-    const url = `${R2_BASE_URL}/${encodeURIComponent(file)}`;
+    const url = `${R2_BASE_URL}/${encodeURIComponent(fileName)}`;
     https.get(url, async (res) => {
       if (res.statusCode !== 200) {
-        reject(new Error(`Failed to fetch ${file}: Status ${res.statusCode}`));
+        reject(new Error(`Failed to fetch ${fileName}: Status ${res.statusCode}`));
         return;
       }
       try {
@@ -24,11 +28,15 @@ async function fetchAndParse(file) {
           thumbnailBase64 = `data:${picture.format};base64,${picture.data.toString('base64')}`;
         }
 
+        // Get hits from Redis
+        const hits = await redis.get(`hit:${fileName}`) || 0;
+
         resolve({
-          name: metadata.common.title || path.parse(file).name,
+          name: metadata.common.title || path.parse(fileName).name,
           artist: metadata.common.artist || 'Unknown',
           thumbnail: thumbnailBase64,
-          file: url
+          file: `/api/stream?file=${encodeURIComponent(fileName)}`,
+          popular: parseInt(hits) >= POPULAR_THRESHOLD
         });
       } catch (err) {
         reject(err);
@@ -41,18 +49,20 @@ async function generateSongsIndex() {
   const files = JSON.parse(fs.readFileSync(fileListPath, 'utf8'));
   const songs = [];
 
-  for (const file of files) {
+  for (const fileEntry of files) {
     try {
-      console.log(`Processing ${file}...`);
-      const songData = await fetchAndParse(file);
+      const fileName = typeof fileEntry === 'string' ? fileEntry : fileEntry.file;
+      console.log(`Processing ${fileName}...`);
+      const songData = await fetchAndParse(fileName);
       songs.push(songData);
     } catch (err) {
-      console.error(`Error processing ${file}:`, err.message);
+      console.error(`Error processing ${fileEntry}:`, err.message);
     }
   }
 
   fs.writeFileSync(outputFile, JSON.stringify(songs, null, 2));
   console.log(`Generated ${outputFile} with ${songs.length} songs.`);
+  await redis.disconnect();
 }
 
 generateSongsIndex();
